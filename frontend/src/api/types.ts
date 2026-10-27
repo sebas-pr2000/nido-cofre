@@ -81,3 +81,9 @@ export interface CreateGiftInput {
   message: string;
   productIds: number[];
 }
+
+export interface CheckoutInput {
+  payerId: string;
+  cardNumber: string;
+  idempotencyKey: string;
+}
