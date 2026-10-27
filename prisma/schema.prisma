@@ -1,0 +1,96 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+}
+
+enum GiftStatus {
+  PAYMENT_PENDING
+  PAYMENT_REJECTED
+  SENT
+  OPENED
+  CHOSEN
+  EXPIRED
+}
+
+enum PaymentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id            String @id
+  name          String
+  avatarUrl     String
+  creditBalance Int    @default(0)
+  giftsSent     Gift[] @relation("GiftSender")
+  giftsReceived Gift[] @relation("GiftReceiver")
+}
+
+model Product {
+  id          Int          @id
+  title       String
+  price       Int
+  imageUrl    String
+  category    String
+  stock       Int
+  giftOptions GiftOption[]
+  chosenIn    Gift[]
+}
+
+model Gift {
+  id              String     @id @default(uuid())
+  senderId        String
+  receiverId      String
+  budget          Int
+  message         String
+  status          GiftStatus @default(PAYMENT_PENDING)
+  chosenProductId Int?
+  creditGenerated Int?
+  thankYouMessage String?
+  openedAt        DateTime?
+  chosenAt        DateTime?
+  expiresAt       DateTime
+  createdAt       DateTime   @default(now())
+
+  sender        User         @relation("GiftSender", fields: [senderId], references: [id])
+  receiver      User         @relation("GiftReceiver", fields: [receiverId], references: [id])
+  chosenProduct Product?     @relation(fields: [chosenProductId], references: [id])
+  options       GiftOption[]
+  payments      Payment[]
+}
+
+model GiftOption {
+  giftId    String
+  productId Int
+  position  Int
+
+  gift    Gift    @relation(fields: [giftId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@id([giftId, productId])
+}
+
+model Payment {
+  id             String        @id @default(uuid())
+  giftId         String
+  amount         Int
+  status         PaymentStatus @default(PENDING)
+  last4          String
+  failureReason  String?
+  idempotencyKey String        @unique
+  createdAt      DateTime      @default(now())
+  resolvedAt     DateTime?
+
+  gift Gift @relation(fields: [giftId], references: [id])
+}
