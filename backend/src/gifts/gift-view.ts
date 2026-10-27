@@ -25,7 +25,7 @@ export const VISIBLE_TO_RECEIVER: GiftStatus[] = [
   GiftStatus.EXPIRED,
 ];
 
-// Lo que ve cada persona del mismo cofre
+// ? Lo que ve cada persona del mismo cofre
 export function toViewerGift(gift: GiftWithRelations, viewerId: string) {
   if (gift.senderId === viewerId) {
     return gift;
