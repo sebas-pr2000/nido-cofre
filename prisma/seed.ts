@@ -4,7 +4,7 @@ const prisma = new PrismaClient();
 
 const USD_TO_COP = 4000;
 
-// Categorías de DummyJSON → categorías de Nido
+// ? Categorías de DummyJSON -> categorías de Nido
 const CATEGORIES: Record<string, string> = {
   'womens-bags': 'Moda',
   'mens-shirts': 'Moda',
@@ -30,18 +30,18 @@ interface DummyResponse {
   products: DummyProduct[];
 }
 
-// Redondea a miles: 23.960 → 24.000
+// ? Redondea a miles: 23.960 -> 24.000
 function toCop(usd: number): number {
   return Math.round((usd * USD_TO_COP) / 1000) * 1000;
 }
 
 async function main() {
-  // 1. Limpiar regalos previos (orden importa por las llaves foráneas)
+  // ? 1. Limpiar regalos previos (orden importa por las llaves foráneas)
   await prisma.payment.deleteMany();
   await prisma.giftOption.deleteMany();
   await prisma.gift.deleteMany();
 
-  // 2. Usuarios de prueba
+  // ? 2. Usuarios de prueba
   const users = [
     { id: 'andres', name: 'Andrés' },
     { id: 'laura', name: 'Laura' },
@@ -60,13 +60,15 @@ async function main() {
     });
   }
 
-  // 3. Catálogo desde DummyJSON
+  // ? 3. Catálogo desde DummyJSON
   for (const [slug, category] of Object.entries(CATEGORIES)) {
     const url = `https://dummyjson.com/products/category/${slug}?limit=5&select=title,price,thumbnail,stock`;
     const res = await fetch(url);
     if (!res.ok) {
       throw new Error(`DummyJSON respondió ${res.status} para "${slug}"`);
     }
+
+    // ? DummyResponse como formato de la respuesta obtenida desde DummyJSON
     const { products } = (await res.json()) as DummyResponse;
 
     for (const p of products) {
@@ -86,7 +88,7 @@ async function main() {
   }
 
   const total = await prisma.product.count();
-  console.log(`✅ Seed listo: ${users.length} usuarios y ${total} productos`);
+  console.log(`Seed listo: ${users.length} usuarios y ${total} productos`);
 }
 
 main()
