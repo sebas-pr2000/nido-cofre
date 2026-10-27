@@ -1,6 +1,7 @@
 import { Navigate, NavLink, Outlet } from 'react-router';
 import { useSession } from '../context/SessionContext';
 import { RealtimeProvider, useRealtime } from '../realtime/RealtimeProvider';
+import { formatCOP } from '../lib/format';
 
 const tabs = [
   { to: '/new', label: 'Regalar' },
@@ -39,18 +40,26 @@ export function AppLayout() {
             <span className="text-lg font-bold text-rose-600">Nido · Cofre</span>
             <LiveIndicator />
           </div>
+
           <div className="flex items-center gap-2">
+            {currentUser.creditBalance > 0 && (
+                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+                {formatCOP(currentUser.creditBalance)}
+                </span>
+            )}
             <img
-              src={currentUser.avatarUrl}
-              alt=""
-              className="size-8 rounded-full bg-rose-100"
-              />
-            <span className="text-sm font-medium text-stone-700">{currentUser.name}</span>
+                src={currentUser.avatarUrl}
+                alt=""
+                className="size-8 rounded-full bg-rose-100"
+            />
+            <span className="hidden text-sm font-medium text-stone-700 sm:inline">
+                {currentUser.name}
+            </span>
             <button
-              onClick={logout}
-              className="text-xs text-stone-500 underline underline-offset-2"
+                onClick={logout}
+                className="text-xs text-stone-500 underline underline-offset-2"
             >
-              Cambiar
+                Cambiar
             </button>
           </div>
         </div>

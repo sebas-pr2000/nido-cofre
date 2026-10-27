@@ -5,6 +5,7 @@ import { CreateGiftPage } from './pages/CreateGiftPage';
 import { SentPage } from './pages/SentPage';
 import { CheckoutPage } from './pages/CheckoutPage';
 import { GiftPage } from './pages/GiftPage';
+import { InboxPage } from './pages/InboxPage';
 
 function ComingSoon({ title }: { title: string }) {
   return <p className="text-center text-stone-500">{title}: próximamente</p>;
@@ -17,7 +18,7 @@ export default function App() {
       <Route element={<AppLayout />}>
         <Route path="/new" element={<CreateGiftPage />} />
         <Route path="/sent" element={<SentPage />} />
-        <Route path="/inbox" element={<ComingSoon title="Recibidos" />} />
+        <Route path="/inbox" element={<InboxPage />} />
         <Route path="/gifts/:id/checkout" element={<CheckoutPage />} />
         <Route path="/gifts/:id" element={<GiftPage />} />
       </Route>

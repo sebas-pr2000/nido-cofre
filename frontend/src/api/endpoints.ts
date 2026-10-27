@@ -20,3 +20,11 @@ export const getGift = (id: string, viewerId: string) => api<Gift>(`/gifts/${id}
 export const getSentGifts = (userId: string) => api<Gift[]>(`/gifts/sent/${encodeURIComponent(userId)}`);
 
 export const checkoutGift = (id: string, input: CheckoutInput) => api<Gift>(`/gifts/${id}/checkout`, { method: 'POST', body: input });
+
+export const getReceivedGifts = (userId: string) => api<Gift[]>(`/gifts/received/${encodeURIComponent(userId)}`);
+
+export const openGift = (id: string, userId: string) => api<Gift>(`/gifts/${id}/open`, { method: 'POST', body: { userId } });
+
+export const chooseOption = (id: string, userId: string, productId: number) => api<Gift>(`/gifts/${id}/choose`, { method: 'POST', body: { userId, productId } });
+
+export const thankGift = (id: string, userId: string, message: string) => api<Gift>(`/gifts/${id}/thank`, { method: 'POST', body: { userId, message } });

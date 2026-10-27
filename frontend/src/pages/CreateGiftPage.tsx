@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { ApiError } from '../api/client';
 import { createGift, getProducts } from '../api/endpoints';
 import type { Product } from '../api/types';
@@ -18,7 +18,9 @@ export function CreateGiftPage() {
 
   const recipients = users.filter((u) => u.id !== currentUser?.id);
 
-  const [receiverId, setReceiverId] = useState(recipients[0]?.id ?? '');
+  const [searchParams] = useSearchParams();
+  const reciprocateTo = recipients.find((u) => u.id === searchParams.get('to'));
+  const [receiverId, setReceiverId] = useState(reciprocateTo?.id ?? recipients[0]?.id ?? '');
   const [budget, setBudget] = useState(150_000);
   const [category, setCategory] = useState('');
   const [products, setProducts] = useState<Product[]>([]);
@@ -96,7 +98,9 @@ export function CreateGiftPage() {
 
   return (
     <form onSubmit={handleSubmit} className="pb-28">
-      <h1 className="text-2xl font-bold text-stone-900">Arma un cofre</h1>
+      <h1 className="text-2xl font-bold text-stone-900">
+        {reciprocateTo ? `Devuélvele el gesto a ${reciprocateTo.name}` : 'Arma un cofre'}
+      </h1>
       <p className="mt-1 text-sm text-stone-600">
         Elige 3 opciones. {receiver?.name ?? 'Quien recibe'} abrirá el cofre y escogerá
         la que más le guste. Lo que sobre del presupuesto queda como saldo Nido para
