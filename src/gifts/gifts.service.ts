@@ -9,6 +9,7 @@ import { CreateGiftDto } from './dto/create-gift.dto.js';
 
 const GIFT_EXPIRATION_DAYS = 7;
 
+// ? usando satisfies, para verificar que el objeto cumpla con el tipo GiftInclude
 export const giftInclude = {
   sender: true,
   receiver: true,

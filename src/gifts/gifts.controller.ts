@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
   Param,
   ParseUUIDPipe,
   Post,
@@ -10,10 +11,15 @@ import {
 } from '@nestjs/common';
 import { GiftsService } from './gifts.service.js';
 import { CreateGiftDto } from './dto/create-gift.dto.js';
+import { PaymentsService } from '../payments/payments.service.js';
+import { CheckoutDto } from './dto/checkout.dto.js';
 
 @Controller('gifts')
 export class GiftsController {
-  constructor(private readonly giftsService: GiftsService) {}
+  constructor(
+    private readonly giftsService: GiftsService,
+    private readonly paymentsService: PaymentsService,
+  ) {}
 
   @Post()
   create(@Body() dto: CreateGiftDto) {
@@ -39,5 +45,16 @@ export class GiftsController {
       throw new BadRequestException('viewerId es requerido');
     }
     return this.giftsService.findOne(id, viewerId);
+  }
+
+
+  @Post(':id/checkout')
+  @HttpCode(200)
+  async checkout(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CheckoutDto,
+  ) {
+    await this.paymentsService.checkout(id, dto);
+    return this.giftsService.findOne(id, dto.payerId);
   }
 }
