@@ -6,11 +6,13 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { allowedOrigins } from '../config/cors.js';
 
 const roomFor = (userId: string) => `user:${userId}`;
 
 @WebSocketGateway({
-  cors: { origin: process.env.FRONTEND_URL ?? 'http://localhost:5173' },
+  // cors: { origin: process.env.FRONTEND_URL ?? 'http://localhost:5173' },
+  cors: { origin: allowedOrigins },
 })
 export class RealtimeGateway implements OnGatewayConnection {
   @WebSocketServer()

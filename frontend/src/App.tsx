@@ -7,9 +7,9 @@ import { CheckoutPage } from './pages/CheckoutPage';
 import { GiftPage } from './pages/GiftPage';
 import { InboxPage } from './pages/InboxPage';
 
-function ComingSoon({ title }: { title: string }) {
-  return <p className="text-center text-stone-500">{title}: próximamente</p>;
-}
+// function ComingSoon({ title }: { title: string }) {
+//   return <p className="text-center text-stone-500">{title}: próximamente</p>;
+// }
 
 export default function App() {
   return (
