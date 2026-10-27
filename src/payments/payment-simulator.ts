@@ -5,6 +5,7 @@ export interface GatewayResult {
   failureReason: string | null;
 }
 
+// ? utilizamos el as const, para que no se pueda enviar un string cualquiera, y que este no se pueda modificar
 export const TEST_CARDS = {
   APPROVED: '4242',
   REJECTED: '0000',

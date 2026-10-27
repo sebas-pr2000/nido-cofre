@@ -13,6 +13,7 @@ import { GiftsService } from './gifts.service.js';
 import { CreateGiftDto } from './dto/create-gift.dto.js';
 import { PaymentsService } from '../payments/payments.service.js';
 import { CheckoutDto } from './dto/checkout.dto.js';
+import { ActorDto, ChooseOptionDto, ThankDto } from './dto/receiver-actions.dto.js';
 
 @Controller('gifts')
 export class GiftsController {
@@ -47,7 +48,6 @@ export class GiftsController {
     return this.giftsService.findOne(id, viewerId);
   }
 
-
   @Post(':id/checkout')
   @HttpCode(200)
   async checkout(
@@ -56,5 +56,23 @@ export class GiftsController {
   ) {
     await this.paymentsService.checkout(id, dto);
     return this.giftsService.findOne(id, dto.payerId);
+  }
+
+  @Post(':id/open')
+  @HttpCode(200)
+  open(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ActorDto) {
+    return this.giftsService.open(id, dto);
+  }
+
+  @Post(':id/choose')
+  @HttpCode(200)
+  choose(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ChooseOptionDto) {
+    return this.giftsService.choose(id, dto);
+  }
+
+  @Post(':id/thank')
+  @HttpCode(200)
+  thank(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ThankDto) {
+    return this.giftsService.thank(id, dto);
   }
 }

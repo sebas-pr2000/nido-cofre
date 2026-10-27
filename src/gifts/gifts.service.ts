@@ -1,42 +1,31 @@
 import {
   BadRequestException,
+  ConflictException,
+  GoneException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { GiftStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateGiftDto } from './dto/create-gift.dto.js';
+import { GiftNotifier } from '../realtime/gift-notifier.service.js';
+import {
+  giftInclude,
+  toViewerGift,
+  VISIBLE_TO_RECEIVER,
+} from './gift-view.js';
+import { ActorDto, ChooseOptionDto, ThankDto } from './dto/receiver-actions.dto.js';
 
 const GIFT_EXPIRATION_DAYS = 7;
 
-// ? usando satisfies, para verificar que el objeto cumpla con el tipo GiftInclude
-export const giftInclude = {
-  sender: true,
-  receiver: true,
-  chosenProduct: true,
-  options: {
-    include: { product: true },
-    orderBy: { position: 'asc' },
-  },
-  payments: { orderBy: { createdAt: 'desc' } },
-} satisfies Prisma.GiftInclude;
-
-export type GiftWithRelations = Prisma.GiftGetPayload<{
-  include: typeof giftInclude;
-}>;
-
-// ? Estados en los que Laura puede ver que tiene un cofre
-const VISIBLE_TO_RECEIVER: GiftStatus[] = [
-  GiftStatus.SENT,
-  GiftStatus.OPENED,
-  GiftStatus.CHOSEN,
-  GiftStatus.EXPIRED,
-];
-
 @Injectable()
 export class GiftsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifier: GiftNotifier,
+  ) {}
 
+  // * Quien regala
   async create(dto: CreateGiftDto) {
     if (dto.senderId === dto.receiverId) {
       throw new BadRequestException('No puedes enviarte un cofre a ti mismo');
@@ -92,6 +81,113 @@ export class GiftsService {
     });
   }
 
+  findSent(userId: string) {
+    return this.prisma.gift.findMany({
+      where: { senderId: userId },
+      include: giftInclude,
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  // * Quien recibe
+  async findReceived(userId: string) {
+    const gifts = await this.prisma.gift.findMany({
+      where: { receiverId: userId, status: { in: VISIBLE_TO_RECEIVER } },
+      include: giftInclude,
+      orderBy: { createdAt: 'desc' },
+    });
+    return gifts.map((g) => toViewerGift(g, userId));
+  }
+
+  async open(giftId: string, dto: ActorDto) {
+    const gift = await this.findForReceiver(giftId, dto.userId);
+
+    if (gift.status !== GiftStatus.SENT) {
+      throw new ConflictException('Este cofre ya fue abierto');
+    }
+    if (gift.expiresAt < new Date()) {
+      throw new GoneException('Este cofre expiró');
+    }
+
+    const { count } = await this.prisma.gift.updateMany({
+      where: { id: giftId, status: GiftStatus.SENT },
+      data: { status: GiftStatus.OPENED, openedAt: new Date() },
+    });
+    if (count === 0) {
+      throw new ConflictException('Este cofre ya fue abierto');
+    }
+
+    await this.notifier.notify(giftId, 'gift_opened');
+    return this.findOne(giftId, dto.userId);
+  }
+
+  async choose(giftId: string, dto: ChooseOptionDto) {
+    const gift = await this.findForReceiver(giftId, dto.userId);
+
+    if (gift.status !== GiftStatus.OPENED) {
+      throw new ConflictException('Primero abre el cofre, o ya elegiste tu regalo');
+    }
+
+    const option = gift.options.find((o) => o.productId === dto.productId);
+    if (!option) {
+      throw new BadRequestException('Ese producto no está en tu cofre');
+    }
+
+    const credit = Math.max(0, gift.budget - option.product.price);
+
+    await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.gift.updateMany({
+        where: { id: giftId, status: GiftStatus.OPENED },
+        data: {
+          status: GiftStatus.CHOSEN,
+          chosenProductId: dto.productId,
+          creditGenerated: credit,
+          chosenAt: new Date(),
+        },
+      });
+      if (updated.count === 0) {
+        throw new ConflictException('Ya elegiste un regalo de este cofre');
+      }
+
+      const stock = await tx.product.updateMany({
+        where: { id: dto.productId, stock: { gt: 0 } },
+        data: { stock: { decrement: 1 } },
+      });
+      if (stock.count === 0) {
+        throw new ConflictException('Ese producto se acaba de agotar, elige otra opción');
+      }
+
+      await tx.user.update({
+        where: { id: dto.userId },
+        data: { creditBalance: { increment: credit } },
+      });
+    });
+
+    await this.notifier.notify(giftId, 'gift_chosen');
+    return this.findOne(giftId, dto.userId);
+  }
+
+  async thank(giftId: string, dto: ThankDto) {
+    const gift = await this.findForReceiver(giftId, dto.userId);
+
+    if (gift.status !== GiftStatus.CHOSEN) {
+      throw new ConflictException('Primero elige tu regalo');
+    }
+
+    const { count } = await this.prisma.gift.updateMany({
+      where: { id: giftId, thankYouMessage: null },
+      data: { thankYouMessage: dto.message.trim() },
+    });
+    if (count === 0) {
+      throw new ConflictException('Ya enviaste tu agradecimiento');
+    }
+
+    await this.notifier.notify(giftId, 'gift_thanked');
+    return this.findOne(giftId, dto.userId);
+  }
+
+  // * Compartido 
+
   async findOne(id: string, viewerId: string) {
     const gift = await this.prisma.gift.findUnique({
       where: { id },
@@ -107,38 +203,21 @@ export class GiftsService {
       throw new NotFoundException('Cofre no encontrado');
     }
 
-    return this.forViewer(gift, viewerId);
+    return toViewerGift(gift, viewerId);
   }
 
-  findSent(userId: string) {
-    return this.prisma.gift.findMany({
-      where: { senderId: userId },
+  private async findForReceiver(giftId: string, userId: string) {
+    const gift = await this.prisma.gift.findUnique({
+      where: { id: giftId },
       include: giftInclude,
-      orderBy: { createdAt: 'desc' },
     });
-  }
-
-  async findReceived(userId: string) {
-    const gifts = await this.prisma.gift.findMany({
-      where: { receiverId: userId, status: { in: VISIBLE_TO_RECEIVER } },
-      include: giftInclude,
-      orderBy: { createdAt: 'desc' },
-    });
-    return gifts.map((g) => this.forViewer(g, userId));
-  }
-
-  // ? Lo que ve cada persona del mismo cofre
-  private forViewer(gift: GiftWithRelations, viewerId: string) {
-    if (gift.senderId === viewerId) {
-      return gift;
+    if (
+      !gift ||
+      gift.receiverId !== userId ||
+      !VISIBLE_TO_RECEIVER.includes(gift.status)
+    ) {
+      throw new NotFoundException('Cofre no encontrado');
     }
-
-    // ? Quien recibe: no ve presupuesto ni pagos,
-    // ? y no ve las opciones hasta abrir el cofre
-    const { budget: _budget, payments: _payments, ...rest } = gift;
-    return {
-      ...rest,
-      options: gift.status === GiftStatus.SENT ? [] : gift.options,
-    };
-  }
+    return gift;
+  } 
 }

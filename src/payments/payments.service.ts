@@ -10,6 +10,15 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { CheckoutDto } from '../gifts/dto/checkout.dto.js';
 import { PENDING_RESOLUTION_MS, simulateGateway } from './payment-simulator.js';
 
+import { GiftNotifier } from '../realtime/gift-notifier.service.js';
+import { GiftEventType } from '../realtime/gift-events.js';
+
+const EVENT_FOR_PAYMENT: Record<PaymentStatus, GiftEventType> = {
+  APPROVED: 'payment_approved',
+  REJECTED: 'payment_rejected',
+  PENDING: 'payment_pending',
+};
+
 // ? Un cofre se puede pagar si nunca se pagó o si el intento anterior fue rechazado
 const PAYABLE_STATUSES: GiftStatus[] = [
   GiftStatus.PAYMENT_PENDING,
@@ -31,7 +40,10 @@ function giftStatusFor(status: PaymentStatus): GiftStatus {
 export class PaymentsService implements OnModuleInit {
   private readonly logger = new Logger(PaymentsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifier: GiftNotifier,
+  ) {}
 
   // ? Si el servidor se reinició con pagos pendientes, se reprograman
   async onModuleInit() {
@@ -108,7 +120,8 @@ export class PaymentsService implements OnModuleInit {
       this.schedulePendingResolution(payment.id);
     }
 
-    // TODO: Paso 6: aquí notificaremos por Socket.io
+    // ? Paso 6: aquí notificaremos por Socket.io
+    await this.notifier.notify(giftId, EVENT_FOR_PAYMENT[payment.status]);
   }
 
   private schedulePendingResolution(paymentId: string) {
@@ -117,23 +130,27 @@ export class PaymentsService implements OnModuleInit {
 
   private async resolvePending(paymentId: string) {
     try {
-      await this.prisma.$transaction(async (tx) => {
         // ? Solo se actualiza si sigue PENDING (evita resolverlo dos veces)
+        const giftId = await this.prisma.$transaction(async (tx) => {
         const { count } = await tx.payment.updateMany({
-          where: { id: paymentId, status: PaymentStatus.PENDING },
-          data: { status: PaymentStatus.APPROVED, resolvedAt: new Date() },
+            where: { id: paymentId, status: PaymentStatus.PENDING },
+            data: { status: PaymentStatus.APPROVED, resolvedAt: new Date() },
         });
-        if (count === 0) return;
+        if (count === 0) return null;
 
         const payment = await tx.payment.findUniqueOrThrow({ where: { id: paymentId } });
         await tx.gift.update({
-          where: { id: payment.giftId },
-          data: { status: GiftStatus.SENT },
+            where: { id: payment.giftId },
+            data: { status: GiftStatus.SENT },
         });
-      });
-      // TODO: Paso 6: aquí también notificaremos por Socket.io
+        return payment.giftId;
+        });
+
+        if (giftId) {
+        await this.notifier.notify(giftId, 'payment_approved');
+        }
     } catch (e) {
-      this.logger.error(`No se pudo resolver el pago ${paymentId}`, e as Error);
+        this.logger.error(`No se pudo resolver el pago ${paymentId}`, e as Error);
     }
-  }
+    }
 }
